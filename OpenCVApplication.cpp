@@ -1853,6 +1853,177 @@ void knearest()
 
 }
 
+#define NR_CLASSES 10
+#define IMG_SIZE 28
+
+int classifyBayes(Mat img, std::vector<double> priors, Mat likelihood) {
+	double class_logs[NR_CLASSES];
+
+	for (int c = 0; c < NR_CLASSES; c++) {
+		class_logs[c] = log(priors[c]);
+		for (int i = 0; i < img.rows; i++) {
+			for (int j = 0; j < img.cols; j++) {
+				if (img.at<uchar>(i, j) == 0) {
+					class_logs[c] += log(1 - likelihood.at<double>(c, i*IMG_SIZE + j));
+				}
+				else {
+					class_logs[c] += log(likelihood.at<double>(c, i*IMG_SIZE + j));
+				}
+			}
+		}
+	}
+
+	double max = class_logs[0];
+	double maxc = 0;
+
+	for (int c = 1; c < NR_CLASSES; c++) {
+		if (class_logs[c] > max) {
+			max = class_logs[c];
+			maxc = c;
+		}
+	}
+
+	return maxc;
+}
+
+// Lab 9
+void bayes()
+{
+	// nr of images from the training set
+	int n = 60000;
+	int d = IMG_SIZE*IMG_SIZE;
+	//feature vector
+	Mat X = Mat(n, d, CV_8UC1);
+	std::vector<int> y;
+	y.resize(n);
+
+	int ni = 0;
+
+	for (int c = 0; c < NR_CLASSES; c++) {
+		char fname[256];
+		int index = 0;
+		while (1) {
+			sprintf(fname, "Images/lab9/train/%d/%06d.png", c, index);
+			Mat img = imread(fname, 0);
+			if (img.cols == 0) break;
+			//process img
+			for (int i = 0; i < img.rows; i++) {
+				for (int j = 0; j < img.cols; j++) {
+					if (img.at<uchar>(i, j) < 128)
+						X.at<uchar>(ni, i * IMG_SIZE + j) = 0;
+					else {
+						X.at<uchar>(ni, i * IMG_SIZE + j) = 255;
+					}
+				}
+			}
+			y[ni] = c;
+			index++;
+			ni++;
+		}	}
+
+	// calculate priors
+	std::vector<double> priors;
+	priors.resize(NR_CLASSES);
+
+	for (int i = 0; i < NR_CLASSES; i++) {
+		priors[i] = 0;
+	}
+
+	for (int i = 0; i < n; i++) {
+		priors[y[i]] ++;
+	}
+
+	for (size_t i = 0; i < NR_CLASSES; i++)
+	{
+		priors[i] /= (double)n;
+	}
+
+	// likelihood
+	Mat likelihood = Mat(NR_CLASSES, d, CV_64FC1);
+
+	//init with 0
+	for (size_t i = 0; i < likelihood.rows; i++)
+	{
+		for (size_t j = 0; j < likelihood.cols; j++)
+		{
+			likelihood = 0;
+		}
+	}
+
+	for (size_t i = 0; i < n; i++)
+	{
+		// total nr of pixels for 
+		for (size_t k = 0; k < d; k++)
+		{
+			if (X.at<uchar>(i, k) == 255) {
+				likelihood.at<double>(y[i], k)++;
+			}
+		}
+	}
+
+	for (size_t i = 0; i < NR_CLASSES; i++)
+	{
+		for (size_t j = 0; j < d; j++)
+		{
+			likelihood.at<double>(i, j) = (likelihood.at<double>(i, j) + 1) / ((priors[i] * n) + NR_CLASSES);
+		}
+	}
+
+	// read test images
+	int n_test = 10000;
+	Mat confusion = Mat(NR_CLASSES, NR_CLASSES, CV_32FC1);
+
+	for (size_t i = 0; i < confusion.rows; i++)
+	{
+		for (size_t j = 0; j < confusion.cols; j++)
+		{
+			confusion.at<float>(i, j) = 0;
+		}
+	}
+
+	for (int c = 0; c < NR_CLASSES; c++) {
+		char fname[256];
+		int index = 0;
+		while (1) {
+			sprintf(fname, "Images/lab9/test/%d/%06d.png", c, index);
+			Mat img = imread(fname, 0);
+			if (img.cols == 0) break;
+			//process img
+			for (int i = 0; i < img.rows; i++) {
+				for (int j = 0; j < img.cols; j++) {
+					if (img.at<uchar>(i, j) < 128)
+						img.at<uchar>(i, j) = 0;
+					else {
+						img.at<uchar>(i, j) = 255;
+					}
+				}
+			}
+			confusion.at<float>(c, classifyBayes(img, priors, likelihood)) ++;
+			index++;
+		}	}
+
+	// accuratete
+	float acc = 0;
+	float correct = 0;
+	float all = 0;
+
+	for (size_t i = 0; i < NR_CLASSES; i++)
+	{
+		correct += confusion.at<float>(i, i);
+		for (size_t j = 0; j < NR_CLASSES; j++)
+		{
+			all += confusion.at<float>(i, j);
+		}
+	}
+
+
+	acc = correct / all;
+	printf("Accuracy is: %f\n", acc);
+
+}
+
+
+
 
 int main()
 {
@@ -1880,6 +2051,7 @@ int main()
 		printf(" 16 - Principal componant analasys\n");
 		printf(" 17 - K-means\n");
 		printf(" 18 - K-nearest\n");
+		printf(" 19 - Bayes\n");
 		printf(" 0 - Exit\n\n");
 		printf("Option: ");
 		scanf("%d",&op);
@@ -1939,6 +2111,9 @@ int main()
 				break;
 			case 18:
 				knearest();
+				break;
+			case 19:
+				bayes();
 				break;
 		}
 	}
